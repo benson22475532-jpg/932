@@ -104,20 +104,6 @@
   <h1>二技中隊92期2隊 新生報到系統</h1>
   <div class="sub" id="subtitle">報到打卡 + 重大傷病調查，即時同步，一鍵產出附件3/附件4/報到情形摘要</div>
 
-  <!-- 設定畫面：第一次使用需輸入 Supabase 連線資訊 -->
-  <section id="configScreen" class="card hidden">
-    <h3>初次設定（每台裝置只需做一次）</h3>
-    <p class="footer-note">請先在 Supabase 建立專案，並在 SQL Editor 執行 supabase_schema.sql，再把下列資訊填入。這裡填的是 anon public key（公開金鑰），不是 service_role key。</p>
-    <label>Supabase Project URL</label>
-    <input type="url" id="cfgUrl" placeholder="https://xxxx.supabase.co" />
-    <label>Supabase anon public key</label>
-    <input type="text" id="cfgKey" placeholder="eyJhbGciOi..." />
-    <div class="row" style="margin-top:12px;">
-      <button id="btnSaveConfig">儲存並連線</button>
-    </div>
-    <div id="configMsg"></div>
-  </section>
-
   <!-- 登入畫面：真正的帳號密碼驗證（Supabase Auth），未登入無法讀寫任何學生資料 -->
   <section id="loginScreen" class="card hidden">
     <h3>工作人員登入</h3>
@@ -128,7 +114,6 @@
     <input type="password" id="loginPassword" placeholder="密碼" />
     <div class="row" style="margin-top:10px;">
       <button id="btnLogin">登入</button>
-      <button class="secondary" id="btnResetConfig2">清除本機設定（更換 Supabase 專案）</button>
     </div>
     <div id="loginMsg"></div>
   </section>
@@ -199,10 +184,7 @@
 
     <div class="card row" style="justify-content:space-between;">
       <span id="whoAmI" class="footer-note"></span>
-      <div class="row">
-        <button class="secondary" id="btnLogout">登出</button>
-        <button class="secondary" id="btnResetConfig">清除本機設定（更換 Supabase 專案時使用）</button>
-      </div>
+      <button class="secondary" id="btnLogout">登出</button>
     </div>
   </section>
 </div>
@@ -297,25 +279,12 @@ function agencyCategory(agency) {
   return "警政單位";
 }
 
-/* ---------------- 本機設定（只存 Supabase 連線資訊，帳密驗證交給 Supabase Auth） ---------------- */
-const LS_URL = "ck92_supabase_url";
-const LS_KEY = "ck92_supabase_key";
-
-function getConfig() {
-  return {
-    url: localStorage.getItem(LS_URL) || "",
-    key: localStorage.getItem(LS_KEY) || "",
-  };
-}
-function saveConfig(url, key) {
-  localStorage.setItem(LS_URL, url);
-  localStorage.setItem(LS_KEY, key);
-}
-function clearConfig() {
-  localStorage.removeItem(LS_URL);
-  localStorage.removeItem(LS_KEY);
-  location.reload();
-}
+/* ---------------- Supabase 連線資訊 ----------------
+   anon public key 依照 Supabase 的設計本來就是給前端公開使用的，
+   真正的存取控制交給 supabase_schema.sql 裡的 RLS（要登入才能讀寫），
+   所以直接寫死在這裡沒有安全疑慮，不需要每台裝置手動輸入。 */
+const SUPABASE_URL = "https://kbjkgfypzcmgyihqbykx.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtiamtnZnlwemNtZ3lpaHFieWt4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTc0NjYsImV4cCI6MjEwMjI3MzQ2Nn0.6n2BNl_NtrTyE-1g8TlvTg6kjI8Ica_J2wsYvUHSB3Y";
 
 /* ---------------- 全域狀態 ---------------- */
 let sb = null;
@@ -325,18 +294,12 @@ let channel = null;
 const $ = (id) => document.getElementById(id);
 
 function showScreen(name) {
-  $("configScreen").classList.toggle("hidden", name !== "config");
   $("loginScreen").classList.toggle("hidden", name !== "login");
   $("mainScreen").classList.toggle("hidden", name !== "main");
 }
 
 async function boot() {
-  const cfg = getConfig();
-  if (!cfg.url || !cfg.key) {
-    showScreen("config");
-    return;
-  }
-  sb = supabase.createClient(cfg.url, cfg.key);
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     startApp(session);
@@ -344,17 +307,6 @@ async function boot() {
     showScreen("login");
   }
 }
-
-$("btnSaveConfig").addEventListener("click", () => {
-  const url = $("cfgUrl").value.trim();
-  const key = $("cfgKey").value.trim();
-  if (!url || !key) {
-    $("configMsg").innerHTML = '<div class="msg err">請填入 Supabase URL 與 anon key</div>';
-    return;
-  }
-  saveConfig(url, key);
-  location.reload();
-});
 
 $("btnLogin").addEventListener("click", async () => {
   const email = $("loginEmail").value.trim();
@@ -371,12 +323,6 @@ $("btnLogin").addEventListener("click", async () => {
     return;
   }
   startApp(data.session);
-});
-$("btnResetConfig2").addEventListener("click", () => {
-  if (confirm("確定要清除本機設定嗎？（不會刪除雲端資料，只是這台裝置要重新輸入 Supabase 連線資訊）")) clearConfig();
-});
-$("btnResetConfig").addEventListener("click", () => {
-  if (confirm("確定要清除本機設定嗎？（不會刪除雲端資料，只是這台裝置要重新輸入 Supabase 連線資訊）")) clearConfig();
 });
 $("btnLogout").addEventListener("click", async () => {
   if (channel) sb.removeChannel(channel);
