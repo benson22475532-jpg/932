@@ -159,6 +159,8 @@
               <th>生日(民國)</th>
               <th>身分</th>
               <th>重大傷病</th>
+              <th>感冒情形</th>
+              <th>備註</th>
             </tr>
           </thead>
           <tbody id="studentRows"></tbody>
@@ -439,6 +441,15 @@ function renderTable() {
             <label><input type="checkbox" data-field="illness_flag" data-id="${idAttr}" ${s.illness_flag ? "checked" : ""}/>有</label>
             <input class="note-input" type="text" placeholder="簡短備註" data-field="illness_note" data-id="${idAttr}" value="${(s.illness_note || "").replace(/"/g, "&quot;")}" ${s.illness_flag ? "" : "disabled"} />
           </div>
+        </td>
+        <td>
+          <div class="flags">
+            <label><input type="checkbox" data-field="cold_flag" data-id="${idAttr}" ${s.cold_flag ? "checked" : ""}/>有</label>
+            <input class="note-input" type="text" placeholder="簡短備註" data-field="cold_note" data-id="${idAttr}" value="${(s.cold_note || "").replace(/"/g, "&quot;")}" ${s.cold_flag ? "" : "disabled"} />
+          </div>
+        </td>
+        <td>
+          <input class="note-input" type="text" placeholder="備註" data-field="remark" data-id="${idAttr}" value="${(s.remark || "").replace(/"/g, "&quot;")}" />
         </td>
       </tr>
     `;

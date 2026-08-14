@@ -16,10 +16,17 @@ create table if not exists students_92_2 (
   checkin_time timestamptz,
   illness_flag boolean not null default false,   -- 重大傷病（有/無）
   illness_note text not null default '',         -- 重大傷病備註（僅供簡短代號/提示，不要輸入詳細病歷）
+  cold_flag boolean not null default false,      -- 感冒情形（有/無）
+  cold_note text not null default '',            -- 感冒情形備註
   remark text not null default '',               -- 其他備註
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- 表已存在時（第二次以後執行）補上新欄位，不會影響既有資料
+alter table students_92_2 add column if not exists cold_flag boolean not null default false;
+alter table students_92_2 add column if not exists cold_note text not null default '';
+alter table students_92_2 add column if not exists remark text not null default '';
 
 create index if not exists idx_students_92_2_exam_no on students_92_2 (exam_no);
 
