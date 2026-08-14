@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>二技中隊92期2隊 新生報到系統</title>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://unpkg.com/docx@8/build/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --text: #1a1d21;
+    --muted: #6b7280;
+    --border: #e2e5e9;
+    --accent: #2563eb;
+    --accent-fg: #ffffff;
+    --ok: #16a34a;
+    --warn: #dc2626;
+    --chip-bg: #eef2ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c;
+      --card: #202226;
+      --text: #e8e9eb;
+      --muted: #9aa0a8;
+      --border: #33363c;
+      --chip-bg: #262b3a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "PingFang TC","Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=text], input[type=password], input[type=url], input[type=datetime-local], textarea, select {
+    width: 100%;
+    padding: 9px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+  button.secondary { background: var(--chip-bg); color: var(--text); }
+  button.danger { background: var(--warn); color: #fff; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .hidden { display: none !important; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: 10px; }
+  .stat { background: var(--chip-bg); border-radius: 10px; padding: 10px 12px; }
+  .stat b { display: block; font-size: 22px; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 6px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+  th { position: sticky; top: 0; background: var(--card); font-size: 12px; color: var(--muted); }
+  tr.checked-in { background: rgba(22,163,74,0.06); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: var(--chip-bg); margin-right: 4px; white-space: nowrap; }
+  .badge.ill { background: #fee2e2; color: #991b1b; }
+  .checkin-toggle { width: 44px; height: 26px; }
+  .flags { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
+  .flags label { display: inline-flex; align-items: center; gap: 4px; margin: 0; color: var(--text); font-size: 12px; }
+  .table-scroll { overflow-x: auto; max-height: 65vh; overflow-y: auto; }
+  .note-input { width: 160px; }
+  .toolbar { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .footer-note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  dialog { border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text); max-width: 420px; width: 92%; padding: 0; }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .dialog-body { padding: 18px; }
+  .msg { font-size: 13px; padding: 8px 10px; border-radius: 8px; margin-top: 8px; }
+  .msg.ok { background: #dcfce7; color: #14532d; }
+  .msg.err { background: #fee2e2; color: #7f1d1d; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>二技中隊92期2隊 新生報到系統</h1>
+  <div class="sub" id="subtitle">報到打卡 + 重大傷病調查，即時同步，一鍵產出附件3/附件4/報到情形摘要</div>
+
+  <!-- 設定畫面：第一次使用需輸入 Supabase 連線資訊 -->
+  <section id="configScreen" class="card hidden">
+    <h3>初次設定（每台裝置只需做一次）</h3>
+    <p class="footer-note">請先在 Supabase 建立專案，並在 SQL Editor 執行 supabase_schema.sql，再把下列資訊填入。這裡填的是 anon public key（公開金鑰），不是 service_role key。</p>
+    <label>Supabase Project URL</label>
+    <input type="url" id="cfgUrl" placeholder="https://xxxx.supabase.co" />
+    <label>Supabase anon public key</label>
+    <input type="text" id="cfgKey" placeholder="eyJhbGciOi..." />
+    <div class="row" style="margin-top:12px;">
+      <button id="btnSaveConfig">儲存並連線</button>
+    </div>
+    <div id="configMsg"></div>
+  </section>
+
+  <!-- 登入畫面：真正的帳號密碼驗證（Supabase Auth），未登入無法讀寫任何學生資料 -->
+  <section id="loginScreen" class="card hidden">
+    <h3>工作人員登入</h3>
+    <p class="footer-note">帳號請找系統管理員（區隊長）用 Supabase 後台 Authentication → Users 建立。</p>
+    <label>Email</label>
+    <input type="text" id="loginEmail" placeholder="staff@example.com" />
+    <label>密碼</label>
+    <input type="password" id="loginPassword" placeholder="密碼" />
+    <div class="row" style="margin-top:10px;">
+      <button id="btnLogin">登入</button>
+      <button class="secondary" id="btnResetConfig2">清除本機設定（更換 Supabase 專案）</button>
+    </div>
+    <div id="loginMsg"></div>
+  </section>
+
+  <!-- 主畫面 -->
+  <section id="mainScreen" class="hidden">
+    <div class="card" id="emptyState">
+      <p>資料庫目前沒有任何學生資料。請系統管理員在自己電腦上執行 seed_students.py 匯入名單（這一步不會在公開網頁上做，避免把整份名冊寫進公開頁面原始碼）。</p>
+    </div>
+
+    <div class="card">
+      <div class="stat-grid" id="statGrid"></div>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <div class="row">
+          <input type="text" id="searchBox" placeholder="搜尋姓名 / 學號 / 系別 / 服務機關" style="width:260px" />
+          <select id="filterTab">
+            <option value="all">全部</option>
+            <option value="in">已報到</option>
+            <option value="out">未報到</option>
+            <option value="ill">重大傷病</option>
+          </select>
+          <select id="filterDept">
+            <option value="">全部系別</option>
+          </select>
+        </div>
+        <div class="row">
+          <button class="secondary" id="btnAddStudent">+ 新增新生</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>報到</th>
+              <th>學號</th>
+              <th>系別</th>
+              <th>姓名</th>
+              <th>性別</th>
+              <th>服務機關</th>
+              <th>生日(民國)</th>
+              <th>身分</th>
+              <th>重大傷病</th>
+            </tr>
+          </thead>
+          <tbody id="studentRows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>統計基準時間（用於匯出檔案的標題與截止時間敘述）</h3>
+      <input type="datetime-local" id="asOfDate" />
+      <div class="row" style="margin-top:14px;">
+        <button id="btnExport2">下載 附件2-92-2新生報到傷病狀況表.docx</button>
+        <button id="btnExport3">下載 附件3-92-2年齡統計.xlsx</button>
+        <button id="btnExport4">下載 附件4-92-2服務機關統計.xlsx</button>
+        <button id="btnExportDoc">下載 學生總隊二技中隊92期2隊新生報到情形摘要.docx</button>
+      </div>
+      <p class="footer-note">
+        重大傷病登記名單已改為獨立的「附件2」檔案（表格形式），報到情形摘要 docx 只會寫「傷病情形：詳如附件2」這句話，不再內嵌名單。<br/>
+        「防疫資料」段落（疫苗施打/體溫快篩）不在本系統蒐集範圍內，匯出的 docx 會留白請人工填寫。<br/>
+        附件3/附件4 的 Excel 已改用 ExcelJS 產生，合併儲存格、欄寬、字級、置中都比照原檔案；工作表2/服務機關表格加了細框線。
+      </p>
+    </div>
+
+    <div class="card row" style="justify-content:space-between;">
+      <span id="whoAmI" class="footer-note"></span>
+      <div class="row">
+        <button class="secondary" id="btnLogout">登出</button>
+        <button class="secondary" id="btnResetConfig">清除本機設定（更換 Supabase 專案時使用）</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<dialog id="addDialog">
+  <div class="dialog-body">
+    <h3>新增新生</h3>
+    <label>准考證編號 / 學號</label>
+    <input type="text" id="newExamNo" />
+    <label>姓名</label>
+    <input type="text" id="newName" />
+    <label>系組別</label>
+    <input type="text" id="newDept" placeholder="例：行政警察學系" />
+    <label>服務機關</label>
+    <input type="text" id="newAgency" />
+    <label>性別</label>
+    <select id="newGender"><option value="男">男</option><option value="女">女</option></select>
+    <label>生日（民國，格式 89/7/31）</label>
+    <input type="text" id="newBirth" placeholder="89/7/31" />
+    <div class="row" style="margin-top:14px;">
+      <button id="btnSaveNewStudent">新增</button>
+      <button class="secondary" id="btnCancelNewStudent">取消</button>
+    </div>
+    <div id="addMsg"></div>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+
+/* ---------------- 學生名單透過 Supabase 讀取（不再寫死在公開頁面原始碼裡） ---------------- */
+
+const DEPT_SHORT = {
+  "行政警察學系": "行政系",
+  "刑事警察學系": "刑事系",
+  "消防學系": "消防系",
+  "交通學系": "交通系",
+  "水上警察學系": "水上系",
+};
+function deptShort(dept) {
+  if (DEPT_SHORT[dept]) return DEPT_SHORT[dept];
+  return dept.replace(/警察學系$/, "系").replace(/學系$/, "系");
+}
+
+const WEEKDAY = ["星期日","星期一","星期二","星期三","星期四","星期五","星期六"];
+
+/* ---------------- 民國曆 / 年齡工具 ---------------- */
+function parseRocDate(str) {
+  if (!str) return null;
+  const parts = String(str).trim().split("/");
+  if (parts.length !== 3) return null;
+  const y = parseInt(parts[0], 10) + 1911;
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+function rocYearOf(str) {
+  if (!str) return null;
+  const y = parseInt(String(str).trim().split("/")[0], 10);
+  return isNaN(y) ? null : y;
+}
+function computeAge(birthRoc, asOfDate) {
+  const b = parseRocDate(birthRoc);
+  if (!b) return null;
+  let age = asOfDate.getFullYear() - b.getFullYear();
+  const mdNow = (asOfDate.getMonth() + 1) * 100 + asOfDate.getDate();
+  const mdBirth = (b.getMonth() + 1) * 100 + b.getDate();
+  if (mdNow < mdBirth) age -= 1;
+  return age;
+}
+function toRocStamp(date) {
+  const y = date.getFullYear() - 1911;
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}${m}${d}`;
+}
+function toRocDateText(date) {
+  const y = date.getFullYear() - 1911;
+  return `${y}年${date.getMonth() + 1}月${date.getDate()}日(${WEEKDAY[date.getDay()]})${date.getHours()}時止`;
+}
+function ageBucketLabel(age) {
+  const start = Math.floor((age - 1) / 5) * 5 + 1;
+  return `${start}-${start + 4}`;
+}
+
+/* ---------------- 機關分類（附件4用） ---------------- */
+function agencyCategory(agency) {
+  if (!agency) return "警政單位";
+  if (agency.includes("消防")) return "消防單位";
+  if (agency.includes("艦隊") || agency.includes("海巡")) return "海巡單位";
+  return "警政單位";
+}
+
+/* ---------------- 本機設定（只存 Supabase 連線資訊，帳密驗證交給 Supabase Auth） ---------------- */
+const LS_URL = "ck92_supabase_url";
+const LS_KEY = "ck92_supabase_key";
+
+function getConfig() {
+  return {
+    url: localStorage.getItem(LS_URL) || "",
+    key: localStorage.getItem(LS_KEY) || "",
+  };
+}
+function saveConfig(url, key) {
+  localStorage.setItem(LS_URL, url);
+  localStorage.setItem(LS_KEY, key);
+}
+function clearConfig() {
+  localStorage.removeItem(LS_URL);
+  localStorage.removeItem(LS_KEY);
+  location.reload();
+}
+
+/* ---------------- 全域狀態 ---------------- */
+let sb = null;
+let students = [];
+let channel = null;
+
+const $ = (id) => document.getElementById(id);
+
+function showScreen(name) {
+  $("configScreen").classList.toggle("hidden", name !== "config");
+  $("loginScreen").classList.toggle("hidden", name !== "login");
+  $("mainScreen").classList.toggle("hidden", name !== "main");
+}
+
+async function boot() {
+  const cfg = getConfig();
+  if (!cfg.url || !cfg.key) {
+    showScreen("config");
+    return;
+  }
+  sb = supabase.createClient(cfg.url, cfg.key);
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    startApp(session);
+  } else {
+    showScreen("login");
+  }
+}
+
+$("btnSaveConfig").addEventListener("click", () => {
+  const url = $("cfgUrl").value.trim();
+  const key = $("cfgKey").value.trim();
+  if (!url || !key) {
+    $("configMsg").innerHTML = '<div class="msg err">請填入 Supabase URL 與 anon key</div>';
+    return;
+  }
+  saveConfig(url, key);
+  location.reload();
+});
+
+$("btnLogin").addEventListener("click", async () => {
+  const email = $("loginEmail").value.trim();
+  const password = $("loginPassword").value;
+  if (!email || !password) {
+    $("loginMsg").innerHTML = '<div class="msg err">請輸入 Email 與密碼</div>';
+    return;
+  }
+  $("btnLogin").disabled = true;
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  $("btnLogin").disabled = false;
+  if (error) {
+    $("loginMsg").innerHTML = '<div class="msg err">登入失敗：' + error.message + "</div>";
+    return;
+  }
+  startApp(data.session);
+});
+$("btnResetConfig2").addEventListener("click", () => {
+  if (confirm("確定要清除本機設定嗎？（不會刪除雲端資料，只是這台裝置要重新輸入 Supabase 連線資訊）")) clearConfig();
+});
+$("btnResetConfig").addEventListener("click", () => {
+  if (confirm("確定要清除本機設定嗎？（不會刪除雲端資料，只是這台裝置要重新輸入 Supabase 連線資訊）")) clearConfig();
+});
+$("btnLogout").addEventListener("click", async () => {
+  if (channel) sb.removeChannel(channel);
+  await sb.auth.signOut();
+  location.reload();
+});
+
+async function startApp(session) {
+  showScreen("main");
+  $("whoAmI").textContent = "登入身分：" + (session.user && session.user.email ? session.user.email : "未知");
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  $("asOfDate").value = now.toISOString().slice(0, 16);
+  await refreshAll();
+  subscribeRealtime();
+}
+
+async function refreshAll() {
+  const { data, error } = await sb.from("students_92_2").select("*").order("dept").order("exam_no");
+  if (error) {
+    alert("讀取資料失敗：" + error.message);
+    return;
+  }
+  students = data || [];
+  $("emptyState").classList.toggle("hidden", students.length > 0);
+  populateDeptFilter();
+  render();
+}
+
+function subscribeRealtime() {
+  if (channel) sb.removeChannel(channel);
+  channel = sb
+    .channel("students_92_2_changes")
+    .on("postgres_changes", { event: "*", schema: "public", table: "students_92_2" }, () => {
+      refreshAll();
+    })
+    .subscribe();
+}
+
+function populateDeptFilter() {
+  const sel = $("filterDept");
+  const cur = sel.value;
+  const depts = [...new Set(students.map((s) => s.dept))].sort();
+  sel.innerHTML = '<option value="">全部系別</option>' + depts.map((d) => `<option value="${d}">${deptShort(d)}</option>`).join("");
+  sel.value = cur;
+}
+
+/* ---------------- 篩選 / 搜尋 ---------------- */
+$("searchBox").addEventListener("input", render);
+$("filterTab").addEventListener("change", render);
+$("filterDept").addEventListener("change", render);
+
+function filteredStudents() {
+  const q = $("searchBox").value.trim().toLowerCase();
+  const tab = $("filterTab").value;
+  const dept = $("filterDept").value;
+  return students.filter((s) => {
+    if (dept && s.dept !== dept) return false;
+    if (tab === "in" && !s.checked_in) return false;
+    if (tab === "out" && s.checked_in) return false;
+    if (tab === "ill" && !s.illness_flag) return false;
+    if (q) {
+      const hay = `${s.exam_no}${s.name}${s.dept}${s.agency}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+/* ---------------- 畫面渲染 ---------------- */
+function render() {
+  renderStats();
+  renderTable();
+}
+
+function renderStats() {
+  const total = students.length;
+  const inCount = students.filter((s) => s.checked_in).length;
+  const male = students.filter((s) => s.gender === "男");
+  const female = students.filter((s) => s.gender === "女");
+  const maleIn = male.filter((s) => s.checked_in).length;
+  const femaleIn = female.filter((s) => s.checked_in).length;
+  const rate = total ? ((inCount / total) * 100).toFixed(1) : "0.0";
+  const ill = students.filter((s) => s.illness_flag).length;
+  $("statGrid").innerHTML = `
+    <div class="stat"><b>${total}</b><span>應到人數（男${male.length}／女${female.length}）</span></div>
+    <div class="stat"><b>${inCount}</b><span>已報到（男${maleIn}／女${femaleIn}）</span></div>
+    <div class="stat"><b>${total - inCount}</b><span>未報到</span></div>
+    <div class="stat"><b>${rate}%</b><span>報到率</span></div>
+    <div class="stat"><b>${ill}</b><span>重大傷病登記</span></div>
+  `;
+}
+
+function renderTable() {
+  const rows = filteredStudents();
+  $("studentRows").innerHTML = rows.map((s) => {
+    const idAttr = s.id;
+    const flags = [];
+    if (s.is_recruited) flags.push('<span class="badge">甄試</span>');
+    flags.push(`<label><input type="checkbox" data-field="is_returning" data-id="${idAttr}" ${s.is_returning ? "checked" : ""}/>復學</label>`);
+    flags.push(`<label><input type="checkbox" data-field="is_indigenous" data-id="${idAttr}" ${s.is_indigenous ? "checked" : ""}/>原住民</label>`);
+    return `
+      <tr class="${s.checked_in ? "checked-in" : ""}">
+        <td><input class="checkin-toggle" type="checkbox" data-field="checked_in" data-id="${idAttr}" ${s.checked_in ? "checked" : ""}/></td>
+        <td>${s.exam_no}</td>
+        <td>${deptShort(s.dept)}</td>
+        <td>${s.name}</td>
+        <td>${s.gender}</td>
+        <td>${s.agency}</td>
+        <td>${s.birth_roc}</td>
+        <td><div class="flags">${flags.join("")}</div></td>
+        <td>
+          <div class="flags">
+            <label><input type="checkbox" data-field="illness_flag" data-id="${idAttr}" ${s.illness_flag ? "checked" : ""}/>有</label>
+            <input class="note-input" type="text" placeholder="簡短備註" data-field="illness_note" data-id="${idAttr}" value="${(s.illness_note || "").replace(/"/g, "&quot;")}" ${s.illness_flag ? "" : "disabled"} />
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  $("studentRows").querySelectorAll('input[type=checkbox][data-field]').forEach((el) => {
+    el.addEventListener("change", onFieldChange);
+  });
+  $("studentRows").querySelectorAll('input[type=text][data-field]').forEach((el) => {
+    el.addEventListener("change", onFieldChange);
+  });
+}
+
+async function onFieldChange(e) {
+  const id = e.target.getAttribute("data-id");
+  const field = e.target.getAttribute("data-field");
+  let value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+  const patch = { [field]: value };
+  if (field === "checked_in") patch.checkin_time = value ? new Date().toISOString() : null;
+  // optimistic local update
+  const idx = students.findIndex((s) => String(s.id) === String(id));
+  if (idx >= 0) Object.assign(students[idx], patch);
+  render();
+  const { error } = await sb.from("students_92_2").update(patch).eq("id", id);
+  if (error) alert("更新失敗：" + error.message);
+}
+
+/* ---------------- 新增新生 ---------------- */
+$("btnAddStudent").addEventListener("click", () => {
+  $("addMsg").innerHTML = "";
+  $("addDialog").showModal();
+});
+$("btnCancelNewStudent").addEventListener("click", () => $("addDialog").close());
+$("btnSaveNewStudent").addEventListener("click", async () => {
+  const exam_no = $("newExamNo").value.trim();
+  const name = $("newName").value.trim();
+  const dept = $("newDept").value.trim();
+  const agency = $("newAgency").value.trim();
+  const gender = $("newGender").value;
+  const birth_roc = $("newBirth").value.trim();
+  if (!exam_no || !name || !dept || !gender) {
+    $("addMsg").innerHTML = '<div class="msg err">學號、姓名、系組別、性別為必填</div>';
+    return;
+  }
+  const is_recruited = exam_no.startsWith("甄");
+  const { error } = await sb.from("students_92_2").insert([{ exam_no, name, dept, agency, gender, birth_roc, is_recruited }]);
+  if (error) {
+    $("addMsg").innerHTML = '<div class="msg err">' + error.message + "</div>";
+    return;
+  }
+  $("addDialog").close();
+  await refreshAll();
+});
+
+/* ---------------- 匯出：附件3 年齡統計（改用 ExcelJS，可寫入真正的字型/置中樣式） ---------------- */
+$("btnExport3").addEventListener("click", () => exportAttachment3());
+
+function checkedInList() {
+  return students.filter((s) => s.checked_in);
+}
+
+const THIN_BORDER = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+const CENTER = { horizontal: "center", vertical: "middle" };
+
+function styleRow(row, { size, bold, border } = {}) {
+  row.eachCell({ includeEmpty: true }, (cell) => {
+    cell.font = { size: size || 12, bold: !!bold };
+    cell.alignment = CENTER;
+    if (border) cell.border = THIN_BORDER;
+  });
+}
+
+async function exportAttachment3() {
+  const asOf = new Date($("asOfDate").value);
+  const stamp = toRocStamp(asOf);
+  const list = checkedInList();
+  const wb = new ExcelJS.Workbook();
+
+  // 工作表2：報到名單明細（欄寬、標題字級比照原檔案）
+  const ws2 = wb.addWorksheet("工作表2");
+  ws2.columns = [
+    { width: 8.9 }, { width: 13.6 }, { width: 27.6 }, { width: 29.8 },
+    { width: 18.4 }, { width: 23.9 }, { width: 20.7 },
+  ];
+  styleRow(ws2.addRow(["編號", "學號", "系別", "姓名", "生日", "單位", "備註"]), { size: 20, bold: false, border: true });
+  list.forEach((s, i) => {
+    const remarkParts = [];
+    if (s.is_returning) remarkParts.push("復學");
+    if (s.is_indigenous) remarkParts.push("原住民");
+    if (s.is_recruited) remarkParts.push("甄試");
+    styleRow(ws2.addRow([i + 1, s.exam_no, deptShort(s.dept), s.name, s.birth_roc, s.agency, remarkParts.join("、")]), { size: 12, border: true });
+  });
+
+  // 年齡 分頁（版面、合併儲存格、字級比照原檔案）
+  const ages = list.map((s) => ({ s, age: computeAge(s.birth_roc, asOf), rocYear: rocYearOf(s.birth_roc) }))
+    .filter((x) => x.age !== null);
+  const male = ages.filter((x) => x.s.gender === "男");
+  const female = ages.filter((x) => x.s.gender === "女");
+
+  const wsAge = wb.addWorksheet("年齡");
+  wsAge.columns = [
+    { width: 11.1 }, { width: 8.4 }, { width: 8.4 }, { width: 8.4 },
+    { width: 13.9 }, { width: 11.1 }, { width: 8.4 }, { width: 8.4 },
+  ];
+
+  function addRow(values, opts) {
+    const row = wsAge.addRow(values);
+    styleRow(row, opts);
+    return row.number;
+  }
+  function mergeRow(rowNum, pairs) {
+    pairs.forEach(([c1, c2]) => wsAge.mergeCells(rowNum, c1, rowNum, c2));
+  }
+
+  addRow(["", "", "", "", "", "", "", "附件3"], { size: 14 });
+  let rn = addRow([`二技中隊92期2隊學生年齡統計表${stamp}`], { size: 18 });
+  mergeRow(rn, [[1, 8]]);
+
+  // 年次統計表：原檔案是左右兩欄併排（各10列），依實際出現的民國年次由小到大排列後對半拆開
+  addRow(["年次", "人數", "男", "女", "年次", "人數", "男", "女"], { size: 16, border: true });
+  const rocYears = [...new Set(ages.map((x) => x.rocYear))].sort((a, b) => a - b);
+  const countByRocYear = (y, gender) => ages.filter((x) => x.rocYear === y && (!gender || x.s.gender === gender)).length;
+  const half = Math.ceil(rocYears.length / 2);
+  const leftYears = rocYears.slice(0, half);
+  const rightYears = rocYears.slice(half);
+  const blockRows = Math.max(leftYears.length, rightYears.length);
+  for (let i = 0; i < blockRows; i++) {
+    const ly = leftYears[i], ry = rightYears[i];
+    const row = [];
+    if (ly !== undefined) { const t = countByRocYear(ly); const f = countByRocYear(ly, "女"); row.push(ly, t, t - f, f); } else { row.push("", "", "", ""); }
+    if (ry !== undefined) { const t = countByRocYear(ry); const f = countByRocYear(ry, "女"); row.push(ry, t, t - f, f); } else { row.push("", "", "", ""); }
+    addRow(row, { size: 16, border: true });
+  }
+
+  const maleTotal = male.length, femaleTotal = female.length;
+  rn = addRow(["男生人數", "", maleTotal], { size: 16 }); mergeRow(rn, [[1, 2], [3, 8]]);
+  rn = addRow(["女生人數", "", femaleTotal], { size: 16 }); mergeRow(rn, [[1, 2], [3, 8]]);
+  rn = addRow(["總人數", "", maleTotal + femaleTotal], { size: 16 }); mergeRow(rn, [[1, 2], [3, 8]]);
+  addRow([], {});
+
+  // 年齡分佈表（5歲一區間，每欄雙格合併）
+  rn = addRow([`二技中隊92期2隊學生年齡分佈表${stamp}`], { size: 18 }); mergeRow(rn, [[1, 8]]);
+  rn = addRow(["年齡", "", "全隊", "", "男生", "", "女生", ""], { size: 16, border: true }); mergeRow(rn, [[1, 2], [3, 4], [5, 6], [7, 8]]);
+  const bucketsSet = new Set(ages.map((x) => ageBucketLabel(x.age)));
+  const buckets = [...bucketsSet].sort((a, b) => parseInt(b) - parseInt(a));
+  let sumAll = 0, sumMale = 0, sumFemale = 0;
+  buckets.forEach((label) => {
+    const [lo, hi] = label.split("-").map(Number);
+    const inBucket = ages.filter((x) => x.age >= lo && x.age <= hi);
+    const f = inBucket.filter((x) => x.s.gender === "女").length;
+    const total = inBucket.length;
+    sumAll += total; sumFemale += f; sumMale += (total - f);
+    rn = addRow([label, "", total, "", total - f, "", f, ""], { size: 16, border: true });
+    mergeRow(rn, [[1, 2], [3, 4], [5, 6], [7, 8]]);
+  });
+  rn = addRow(["總人數", "", sumAll, "", sumMale, "", sumFemale, ""], { size: 16, border: true });
+  mergeRow(rn, [[1, 2], [3, 4], [5, 6], [7, 8]]);
+  const avgAll = ages.length ? (ages.reduce((a, x) => a + x.age, 0) / ages.length) : 0;
+  const avgMale = male.length ? (male.reduce((a, x) => a + x.age, 0) / male.length) : 0;
+  const avgFemale = female.length ? (female.reduce((a, x) => a + x.age, 0) / female.length) : 0;
+  rn = addRow(["平均", "", avgAll.toFixed(1), "", avgMale.toFixed(1), "", avgFemale.toFixed(1), ""], { size: 16, border: true });
+  mergeRow(rn, [[1, 2], [3, 4], [5, 6], [7, 8]]);
+  addRow([], {});
+
+  // 各系年齡統計
+  rn = addRow([`二技中隊92期2隊各系學生年齡統計表${stamp}`], { size: 18 }); mergeRow(rn, [[1, 8]]);
+  const deptList = [...new Set(list.map((s) => s.dept))];
+  addRow(["性別/系別", ...deptList.map(deptShort), "備註"], { size: 14, border: true });
+  const deptAvg = (dept, gender) => {
+    const arr = ages.filter((x) => x.s.dept === dept && (!gender || x.s.gender === gender));
+    if (!arr.length) return "";
+    return (arr.reduce((a, x) => a + x.age, 0) / arr.length).toFixed(1);
+  };
+  addRow(["男生", ...deptList.map((d) => deptAvg(d, "男"))], { size: 14, border: true });
+  addRow(["女生", ...deptList.map((d) => deptAvg(d, "女"))], { size: 14, border: true });
+  addRow(["全系平均", ...deptList.map((d) => deptAvg(d))], { size: 14, border: true });
+  addRow([], {});
+
+  // 最大最小年齡
+  rn = addRow([`二技中隊92期2隊男女學生最大、最小年齡${stamp}`], { size: 18 }); mergeRow(rn, [[1, 8]]);
+  addRow(["准考證號", "系別", "姓名", "性別", "生日", "年齡", "備註"], { size: 14, border: true });
+  ["男", "女"].forEach((g) => {
+    const arr = ages.filter((x) => x.s.gender === g);
+    if (!arr.length) return;
+    const maxAge = Math.max(...arr.map((x) => x.age));
+    const minAge = Math.min(...arr.map((x) => x.age));
+    arr.filter((x) => x.age === maxAge).forEach((x) => addRow([x.s.exam_no, deptShort(x.s.dept), x.s.name, x.s.gender, x.s.birth_roc, x.age, "最大"], { size: 14, border: true }));
+    arr.filter((x) => x.age === minAge).forEach((x) => addRow([x.s.exam_no, deptShort(x.s.dept), x.s.name, x.s.gender, x.s.birth_roc, x.age, "最小"], { size: 14, border: true }));
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  saveAs(new Blob([buf], { type: "application/octet-stream" }), "附件3-92-2年齡統計.xlsx");
+}
+
+/* ---------------- 匯出：附件4 服務機關統計（ExcelJS） ---------------- */
+$("btnExport4").addEventListener("click", () => exportAttachment4());
+
+async function exportAttachment4() {
+  const asOf = new Date($("asOfDate").value);
+  const stamp = toRocStamp(asOf);
+  const list = checkedInList();
+
+  const cats = { "警政單位": {}, "消防單位": {}, "海巡單位": {} };
+  list.forEach((s) => {
+    const cat = agencyCategory(s.agency);
+    cats[cat][s.agency] = (cats[cat][s.agency] || 0) + 1;
+  });
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("服務機關");
+  ws.columns = [
+    { width: 20.7 }, { width: 7.7 }, { width: 20.7 }, { width: 7.7 }, { width: 20.7 }, { width: 7.7 },
+  ];
+
+  function addRow(values, opts) {
+    const row = ws.addRow(values);
+    styleRow(row, opts);
+    return row.number;
+  }
+  function mergeRow(rowNum, c1, c2) {
+    ws.mergeCells(rowNum, c1, rowNum, c2);
+  }
+
+  let rn = addRow(["", "", "", "", "", "附件4"], { size: 14 });
+  rn = addRow([`二技中隊92期2隊學生服務單位分佈一覽表${stamp}`], { size: 18 });
+  mergeRow(rn, 1, 6);
+
+  // 原檔案的「單位/人數」欄位標題只在第一個有資料的分類上方出現一次，後續分類不重複標題
+  let grandTotal = 0;
+  let headerWritten = false;
+  ["警政單位", "消防單位", "海巡單位"].forEach((catName) => {
+    const entries = Object.entries(cats[catName]).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) return;
+    rn = addRow([catName], { size: 16, bold: true });
+    mergeRow(rn, 1, 6);
+    if (!headerWritten) {
+      addRow(["單位", "人數", "單位", "人數", "單位", "人數"], { size: 12, border: true });
+      headerWritten = true;
+    }
+    let subtotal = 0;
+    for (let i = 0; i < entries.length; i += 3) {
+      const row = [];
+      for (let j = 0; j < 3; j++) {
+        const e = entries[i + j];
+        if (e) { row.push(e[0], e[1]); subtotal += e[1]; } else { row.push("", ""); }
+      }
+      addRow(row, { size: 12, border: true });
+    }
+    addRow(["", "", "小計：", subtotal, "名"], { size: 12 });
+    grandTotal += subtotal;
+  });
+  addRow(["", "", "總計：", grandTotal, "名"], { size: 12, bold: true });
+
+  const buf = await wb.xlsx.writeBuffer();
+  saveAs(new Blob([buf], { type: "application/octet-stream" }), "附件4-92-2服務機關統計.xlsx");
+}
+
+/* ---------------- 匯出：報到情形摘要 docx ---------------- */
+$("btnExportDoc").addEventListener("click", () => exportSummaryDocx());
+
+function genderCountText(arr) {
+  const m = arr.filter((s) => s.gender === "男").length;
+  const f = arr.filter((s) => s.gender === "女").length;
+  return `${arr.length}名(男${m}名、女${f}名)`;
+}
+
+function absentSentence(absentList) {
+  if (!absentList.length) return "全員到齊。";
+  const byGender = { "男": [], "女": [] };
+  absentList.forEach((s) => { (byGender[s.gender] = byGender[s.gender] || []).push(s); });
+  const parts = [];
+  ["男", "女"].forEach((g) => {
+    const arr = byGender[g];
+    if (!arr || !arr.length) return;
+    const byDept = {};
+    arr.forEach((s) => { const d = deptShort(s.dept); byDept[d] = (byDept[d] || 0) + 1; });
+    const deptText = Object.entries(byDept).map(([d, c]) => `${d}${c}名`).join("及");
+    parts.push(`${arr.length}名${g === "男" ? "男生" : "女生"}(${deptText})`);
+  });
+  return parts.join("，") + "。";
+}
+
+async function exportSummaryDocx() {
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
+  const asOf = new Date($("asOfDate").value);
+  const list = checkedInList();
+  const absent = students.filter((s) => !s.checked_in);
+  const total = students.length;
+  const rate = total ? ((list.length / total) * 100).toFixed(1) : "0.0";
+
+  const returning = students.filter((s) => s.is_returning);
+  const recruited = students.filter((s) => s.is_recruited);
+  const indigenous = students.filter((s) => s.is_indigenous);
+
+  const ages = list.map((s) => computeAge(s.birth_roc, asOf)).filter((a) => a !== null);
+  const maxAge = ages.length ? Math.max(...ages) : null;
+  const minAge = ages.length ? Math.min(...ages) : null;
+  const maleAges = list.filter((s) => s.gender === "男").map((s) => computeAge(s.birth_roc, asOf)).filter((a) => a !== null);
+  const femaleAges = list.filter((s) => s.gender === "女").map((s) => computeAge(s.birth_roc, asOf)).filter((a) => a !== null);
+  const avg = (arr) => (arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : "0.0");
+  const maxStudent = list.find((s) => computeAge(s.birth_roc, asOf) === maxAge);
+  const minStudent = list.find((s) => computeAge(s.birth_roc, asOf) === minAge);
+
+  const p = (text, bold) => new Paragraph({ children: [new TextRun({ text, bold: !!bold })] });
+
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: [
+        new Paragraph({ text: "學生總隊二技中隊92期2隊新生報到情形摘要", heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER }),
+        p(`統計時間：${toRocDateText(asOf)}`),
+        new Paragraph({ text: "" }),
+        p("報到統計：", true),
+        p(`應到人數：${genderCountText(students)}。`),
+        p(`今日報到人數：${genderCountText(list)}，報到率${rate}％。`),
+        p(`未報到名單：${absentSentence(absent)}`),
+        p(`復學生人數：${genderCountText(returning)}。`),
+        p(`甄試生人數：${genderCountText(recruited)}。`),
+        p(`原住民人數：${genderCountText(indigenous)}。`),
+        p("傷病情形：詳如附件2。"),
+        p("年齡統計：詳如附件3。"),
+        p(`最高年齡：${maxAge !== null ? maxAge + "歲" : "－"}${maxStudent ? "（" + maxStudent.name + "）" : ""}。`),
+        p(`最小年齡：${minAge !== null ? minAge + "歲" : "－"}${minStudent ? "（" + minStudent.name + "）" : ""}。`),
+        p(`平均年齡：全隊${avg(ages)}歲、男生${avg(maleAges)}歲、女生${avg(femaleAges)}歲。`),
+        p("服務機關統計：詳如附件4。"),
+        p("防疫資料：", true),
+        p("　(一)施打疫苗情形統計：（請人工填寫，本系統未蒐集疫苗資料）"),
+        p("　(二)體溫及快篩結果：（請人工填寫，本系統未蒐集體溫/快篩資料）"),
+      ],
+    }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  saveAs(blob, "學生總隊二技中隊92期2隊新生報到情形摘要.docx");
+}
+
+/* ---------------- 匯出：附件2 傷病狀況表 docx（獨立檔案） ---------------- */
+$("btnExport2").addEventListener("click", () => exportAttachment2());
+
+async function exportAttachment2() {
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType } = docx;
+  const asOf = new Date($("asOfDate").value);
+  const illList = students.filter((s) => s.illness_flag);
+
+  const p = (text, bold) => new Paragraph({ children: [new TextRun({ text, bold: !!bold })] });
+  const headCell = (text) => new TableCell({
+    children: [new Paragraph({ text, alignment: AlignmentType.CENTER })],
+    shading: { fill: "EEEEEE" },
+  });
+  const bodyCell = (text) => new TableCell({
+    children: [new Paragraph({ text: String(text), alignment: AlignmentType.CENTER })],
+  });
+
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: ["編號", "學號", "系別", "姓名", "性別", "傷病狀況備註"].map(headCell),
+  });
+
+  const dataRows = illList.length
+    ? illList.map((s, i) => new TableRow({
+        children: [
+          bodyCell(i + 1), bodyCell(s.exam_no), bodyCell(deptShort(s.dept)), bodyCell(s.name),
+          bodyCell(s.gender), bodyCell(s.illness_note || "（未填備註）"),
+        ],
+      }))
+    : [new TableRow({
+        children: [new TableCell({
+          columnSpan: 6,
+          children: [new Paragraph({ text: "無登記案例。", alignment: AlignmentType.CENTER })],
+        })],
+      })];
+
+  const table = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [headerRow, ...dataRows],
+  });
+
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: [
+        new Paragraph({ text: "二技中隊92期2隊新生報到傷病狀況表", heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER }),
+        p(`統計時間：${toRocDateText(asOf)}`),
+        p(`重大傷病登記人數：${illList.length}名。`),
+        new Paragraph({ text: "" }),
+        table,
+      ],
+    }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  saveAs(blob, "附件2-92-2新生報到傷病狀況表.docx");
+}
+
+/* ---------------- 啟動 ---------------- */
+boot();
+</script>
+</body>
+</html>
