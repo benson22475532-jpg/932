@@ -146,6 +146,7 @@
         </div>
         <div class="row">
           <button class="secondary" id="btnAddStudent">+ 新增新生</button>
+          <button class="danger" id="btnResetCheckin">重置報到</button>
         </div>
       </div>
       <div class="table-scroll">
@@ -164,6 +165,7 @@
               <th>重大傷病</th>
               <th>感冒情形</th>
               <th>備註</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody id="studentRows"></tbody>
@@ -216,6 +218,34 @@
       <button class="secondary" id="btnCancelNewStudent">取消</button>
     </div>
     <div id="addMsg"></div>
+  </div>
+</dialog>
+
+<dialog id="editDialog">
+  <div class="dialog-body">
+    <h3 style="margin:0 0 4px;">編輯學生資料</h3>
+    <label>臨時學號</label>
+    <input type="text" id="editTempNo" />
+    <label>准考證編號</label>
+    <input type="text" id="editExamNo" />
+    <label>姓名</label>
+    <input type="text" id="editName" />
+    <label>系組別</label>
+    <input type="text" id="editDept" placeholder="例：行政警察學系" />
+    <label>服務機關</label>
+    <input type="text" id="editAgency" />
+    <label>性別</label>
+    <select id="editGender"><option value="男">男</option><option value="女">女</option></select>
+    <label>生日（民國，格式 89/7/31）</label>
+    <input type="text" id="editBirth" placeholder="89/7/31" />
+    <div class="row" style="margin-top:14px;justify-content:space-between;">
+      <div class="row">
+        <button id="btnSaveEdit">儲存</button>
+        <button class="secondary" id="btnCancelEdit">取消</button>
+      </div>
+      <button class="danger" id="btnDeleteStudent">刪除學生</button>
+    </div>
+    <div id="editMsg"></div>
   </div>
 </dialog>
 
@@ -463,6 +493,7 @@ function renderTable() {
         <td>
           <input class="note-input" type="text" placeholder="備註" data-field="remark" data-id="${idAttr}" value="${(s.remark || "").replace(/"/g, "&quot;")}" />
         </td>
+        <td><button class="secondary" style="padding:4px 10px;font-size:12px;" data-editid="${idAttr}">編輯</button></td>
       </tr>
     `;
   }).join("");
@@ -472,6 +503,12 @@ function renderTable() {
   });
   $("studentRows").querySelectorAll('input[type=text][data-field]').forEach((el) => {
     el.addEventListener("change", onFieldChange);
+  });
+  $("studentRows").querySelectorAll("[data-editid]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const s = students.find((x) => String(x.id) === btn.getAttribute("data-editid"));
+      if (s) openEditDialog(s);
+    });
   });
 }
 
@@ -514,6 +551,79 @@ $("btnSaveNewStudent").addEventListener("click", async () => {
     return;
   }
   $("addDialog").close();
+  await refreshAll();
+});
+
+/* ---------------- 重置報到 ---------------- */
+$("btnResetCheckin").addEventListener("click", async () => {
+  const inCount = students.filter((s) => s.checked_in).length;
+  if (!inCount) { alert("目前沒有任何人已報到，無需重置。"); return; }
+  if (!confirm(`確定要重置全部 ${inCount} 人的報到狀態？所有「已報到」將清空，此操作無法復原。`)) return;
+  $("btnResetCheckin").disabled = true;
+  const { error } = await sb.from("students_92_2")
+    .update({ checked_in: false, checkin_time: null })
+    .gt("id", 0);
+  $("btnResetCheckin").disabled = false;
+  if (error) { alert("重置失敗：" + error.message); return; }
+  await refreshAll();
+});
+
+/* ---------------- 編輯 / 刪除學生 ---------------- */
+let editingStudentId = null;
+
+function openEditDialog(s) {
+  editingStudentId = s.id;
+  $("editTempNo").value = s.temp_no || "";
+  $("editExamNo").value = s.exam_no || "";
+  $("editName").value = s.name || "";
+  $("editDept").value = s.dept || "";
+  $("editAgency").value = s.agency || "";
+  $("editGender").value = s.gender || "男";
+  $("editBirth").value = s.birth_roc || "";
+  $("editMsg").innerHTML = "";
+  $("editDialog").showModal();
+}
+
+$("btnCancelEdit").addEventListener("click", () => $("editDialog").close());
+
+$("btnSaveEdit").addEventListener("click", async () => {
+  const temp_no  = $("editTempNo").value.trim();
+  const exam_no  = $("editExamNo").value.trim();
+  const name     = $("editName").value.trim();
+  const dept     = $("editDept").value.trim();
+  const agency   = $("editAgency").value.trim();
+  const gender   = $("editGender").value;
+  const birth_roc = $("editBirth").value.trim();
+  if (!exam_no || !name || !dept || !gender) {
+    $("editMsg").innerHTML = '<div class="msg err">准考證、姓名、系組別、性別為必填</div>';
+    return;
+  }
+  const is_recruited = exam_no.startsWith("甄");
+  $("btnSaveEdit").disabled = true;
+  const { error } = await sb.from("students_92_2")
+    .update({ temp_no, exam_no, name, dept, agency, gender, birth_roc, is_recruited })
+    .eq("id", editingStudentId);
+  $("btnSaveEdit").disabled = false;
+  if (error) {
+    $("editMsg").innerHTML = '<div class="msg err">' + error.message + "</div>";
+    return;
+  }
+  $("editDialog").close();
+  await refreshAll();
+});
+
+$("btnDeleteStudent").addEventListener("click", async () => {
+  const s = students.find((x) => x.id === editingStudentId);
+  const name = s ? s.name : "此學生";
+  if (!confirm(`確定要刪除「${name}」？此操作無法復原。`)) return;
+  $("btnDeleteStudent").disabled = true;
+  const { error } = await sb.from("students_92_2").delete().eq("id", editingStudentId);
+  $("btnDeleteStudent").disabled = false;
+  if (error) {
+    $("editMsg").innerHTML = '<div class="msg err">刪除失敗：' + error.message + "</div>";
+    return;
+  }
+  $("editDialog").close();
   await refreshAll();
 });
 

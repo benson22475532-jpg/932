@@ -74,6 +74,11 @@ create policy "authenticated can insert"
   on students_92_2 for insert
   with check (auth.role() = 'authenticated');
 
+drop policy if exists "authenticated can delete" on students_92_2;
+create policy "authenticated can delete"
+  on students_92_2 for delete
+  using (auth.role() = 'authenticated');
+
 -- 啟用 Realtime（讓多台電腦即時看到彼此的報到狀態）
 -- 用 DO block 檢查是否已加入過，這樣這份腳本可以安全重複執行不會報錯
 do $$
