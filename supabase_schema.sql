@@ -67,7 +67,16 @@ create policy "authenticated can insert"
   with check (auth.role() = 'authenticated');
 
 -- 啟用 Realtime（讓多台電腦即時看到彼此的報到狀態）
-alter publication supabase_realtime add table students_92_2;
+-- 用 DO block 檢查是否已加入過，這樣這份腳本可以安全重複執行不會報錯
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'students_92_2'
+  ) then
+    alter publication supabase_realtime add table students_92_2;
+  end if;
+end $$;
 
 -- 工作人員帳號請到 Supabase 後台 Authentication → Users → Add user 手動建立
 -- （email + password），不要用 SQL 建立，避免密碼明碼留在這份檔案或 git 紀錄裡。
