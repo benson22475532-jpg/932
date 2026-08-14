@@ -137,6 +137,8 @@
             <option value="in">已報到</option>
             <option value="out">未報到</option>
             <option value="ill">重大傷病</option>
+            <option value="cold">感冒情形</option>
+            <option value="remark">有備註</option>
           </select>
           <select id="filterDept">
             <option value="">全部系別</option>
@@ -386,8 +388,10 @@ function filteredStudents() {
     if (tab === "in" && !s.checked_in) return false;
     if (tab === "out" && s.checked_in) return false;
     if (tab === "ill" && !s.illness_flag) return false;
+    if (tab === "cold" && !s.cold_flag) return false;
+    if (tab === "remark" && !s.remark) return false;
     if (q) {
-      const hay = `${s.exam_no}${s.name}${s.dept}${s.agency}`.toLowerCase();
+      const hay = `${s.exam_no}${s.name}${s.dept}${s.agency}${s.illness_note || ""}${s.cold_note || ""}${s.remark || ""}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -409,12 +413,16 @@ function renderStats() {
   const femaleIn = female.filter((s) => s.checked_in).length;
   const rate = total ? ((inCount / total) * 100).toFixed(1) : "0.0";
   const ill = students.filter((s) => s.illness_flag).length;
+  const cold = students.filter((s) => s.cold_flag).length;
+  const hasRemark = students.filter((s) => s.remark).length;
   $("statGrid").innerHTML = `
     <div class="stat"><b>${total}</b><span>應到人數（男${male.length}／女${female.length}）</span></div>
     <div class="stat"><b>${inCount}</b><span>已報到（男${maleIn}／女${femaleIn}）</span></div>
     <div class="stat"><b>${total - inCount}</b><span>未報到</span></div>
     <div class="stat"><b>${rate}%</b><span>報到率</span></div>
     <div class="stat"><b>${ill}</b><span>重大傷病登記</span></div>
+    <div class="stat"><b>${cold}</b><span>感冒情形</span></div>
+    <div class="stat"><b>${hasRemark}</b><span>有備註</span></div>
   `;
 }
 
