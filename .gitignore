@@ -1,6 +1,7 @@
 # 含有真實學生姓名/生日/服務機關等個資，絕對不能進公開 repo
 preview.html
 seed_students.py
+update_temp_no.py
 seed.json
 *.env
 __pycache__/
