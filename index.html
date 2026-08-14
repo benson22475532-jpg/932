@@ -131,7 +131,7 @@
     <div class="card">
       <div class="toolbar">
         <div class="row">
-          <input type="text" id="searchBox" placeholder="搜尋姓名 / 學號 / 系別 / 服務機關" style="width:260px" />
+          <input type="text" id="searchBox" placeholder="搜尋姓名 / 臨時學號 / 准考證 / 系別 / 服務機關" style="width:300px" />
           <select id="filterTab">
             <option value="all">全部</option>
             <option value="in">已報到</option>
@@ -153,7 +153,8 @@
           <thead>
             <tr>
               <th>報到</th>
-              <th>學號</th>
+              <th>臨時學號</th>
+              <th>准考證</th>
               <th>系別</th>
               <th>姓名</th>
               <th>性別</th>
@@ -196,7 +197,9 @@
 <dialog id="addDialog">
   <div class="dialog-body">
     <h3>新增新生</h3>
-    <label>准考證編號 / 學號</label>
+    <label>臨時學號</label>
+    <input type="text" id="newTempNo" placeholder="例：936001" />
+    <label>准考證編號</label>
     <input type="text" id="newExamNo" />
     <label>姓名</label>
     <input type="text" id="newName" />
@@ -391,7 +394,7 @@ function filteredStudents() {
     if (tab === "cold" && !s.cold_flag) return false;
     if (tab === "remark" && !s.remark) return false;
     if (q) {
-      const hay = `${s.exam_no}${s.name}${s.dept}${s.agency}${s.illness_note || ""}${s.cold_note || ""}${s.remark || ""}`.toLowerCase();
+      const hay = `${s.temp_no || ""}${s.exam_no}${s.name}${s.dept}${s.agency}${s.illness_note || ""}${s.cold_note || ""}${s.remark || ""}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -437,6 +440,7 @@ function renderTable() {
     return `
       <tr class="${s.checked_in ? "checked-in" : ""}">
         <td><input class="checkin-toggle" type="checkbox" data-field="checked_in" data-id="${idAttr}" ${s.checked_in ? "checked" : ""}/></td>
+        <td>${s.temp_no || ""}</td>
         <td>${s.exam_no}</td>
         <td>${deptShort(s.dept)}</td>
         <td>${s.name}</td>
@@ -492,6 +496,7 @@ $("btnAddStudent").addEventListener("click", () => {
 });
 $("btnCancelNewStudent").addEventListener("click", () => $("addDialog").close());
 $("btnSaveNewStudent").addEventListener("click", async () => {
+  const temp_no = $("newTempNo").value.trim();
   const exam_no = $("newExamNo").value.trim();
   const name = $("newName").value.trim();
   const dept = $("newDept").value.trim();
@@ -499,11 +504,11 @@ $("btnSaveNewStudent").addEventListener("click", async () => {
   const gender = $("newGender").value;
   const birth_roc = $("newBirth").value.trim();
   if (!exam_no || !name || !dept || !gender) {
-    $("addMsg").innerHTML = '<div class="msg err">學號、姓名、系組別、性別為必填</div>';
+    $("addMsg").innerHTML = '<div class="msg err">准考證、姓名、系組別、性別為必填</div>';
     return;
   }
   const is_recruited = exam_no.startsWith("甄");
-  const { error } = await sb.from("students_92_2").insert([{ exam_no, name, dept, agency, gender, birth_roc, is_recruited }]);
+  const { error } = await sb.from("students_92_2").insert([{ temp_no, exam_no, name, dept, agency, gender, birth_roc, is_recruited }]);
   if (error) {
     $("addMsg").innerHTML = '<div class="msg err">' + error.message + "</div>";
     return;

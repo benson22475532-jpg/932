@@ -27,6 +27,7 @@ create table if not exists students_92_2 (
 alter table students_92_2 add column if not exists cold_flag boolean not null default false;
 alter table students_92_2 add column if not exists cold_note text not null default '';
 alter table students_92_2 add column if not exists remark text not null default '';
+alter table students_92_2 add column if not exists temp_no text not null default '';
 
 create index if not exists idx_students_92_2_exam_no on students_92_2 (exam_no);
 
